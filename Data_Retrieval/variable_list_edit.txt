@@ -1,7 +1,3 @@
 !Sample_characteristics_ch1
 !Sample_description
-!Sample_geo_accession
-!Sample_library_source
-!Sample_library_strategy
-!Sample_organism_ch1
 !Sample_title

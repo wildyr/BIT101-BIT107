@@ -1,0 +1,16 @@
+!Sample_channel_count
+!Sample_characteristics_ch1
+!Sample_data_row_count
+!Sample_description
+!Sample_geo_accession
+!Sample_instrument_model
+!Sample_library_selection
+!Sample_library_source
+!Sample_library_strategy
+!Sample_molecule_ch1
+!Sample_organism_ch1
+!Sample_platform_id
+!Sample_source_name_ch1
+!Sample_taxid_ch1
+!Sample_title
+!Sample_type

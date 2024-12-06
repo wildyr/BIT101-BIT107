@@ -1,36 +1,37 @@
 #!/bin/bash
 
-# Input and output file paths
-input_file="filtered_metadata.txt"
+# File paths
+input_file="converted_metadata.csv"
 output_file="prepared_metadata.csv"
 
-# Temporary file for intermediate steps
-temp_file="temp_metadata.txt"
+# Define the new row headers
+new_headers=("cell line" "cell type" "genotype" "treatment" "hours" "description")
 
-# Function to clean and rename variable names
-clean_variable_name() {
-    local name="$1"
-    # Remove "!" and replace underscores with spaces
-    echo "$name" | sed -e 's/^!//' -e 's/_/ /g' -e 's/ch1/ (ch1)/g'
-}
-
-# Prepare the header
+# Read the input file line by line and replace the row header
 {
-    # Process each line in the input file
-    while IFS=$'\t' read -r first_column rest_of_line; do
-        # Clean the variable name
-        cleaned_name=$(clean_variable_name "$first_column")
-        # Write the cleaned name followed by the rest of the line
-        echo -e "$cleaned_name\t$rest_of_line"
+    # Initialize a counter for the new headers
+    i=0
+
+    # Read each line of the input file
+    while IFS=, read -r first_col rest_of_line; do
+        # Replace the first column with the new header if we have one
+        if [ $i -lt ${#new_headers[@]} ]; then
+            echo "${new_headers[$i]},$rest_of_line"
+            ((i++))
+        else
+            # If we run out of new headers, just print the line as it is
+            echo "$first_col,$rest_of_line"
+        fi
     done < "$input_file"
-} > "$temp_file"
+} > "$output_file"
 
-# Convert the cleaned file to CSV format
-# Replace tabs with commas
-sed 's/\t/,/g' "$temp_file" > "$output_file"
+# Loop through each header and remove instances where it appears followed by a colon
+for header in "${new_headers[@]}"; do
+    # Use sed to remove the header followed by a colon from the entire document
+    sed -i "s/\b$header\b: //g" "$output_file"
+done
 
-# Clean up temporary file
-rm "$temp_file"
+sed -i 's/time point_(in_hours): //g' "$output_file"
 
-echo "Metadata prepared for R and saved to $output_file"
+echo "Row headers updated and saved to $output_file"
 

@@ -5,7 +5,7 @@ input_file="prepared_metadata.csv"
 output_file="cleaned_metadata.csv"
 
 # Define the new row headers
-new_headers=("cell line" "cell type" "genotype" "treatment" "time point_(in_hours)" "description")
+new_headers=("cell line" "cell type" "genotype" "treatment" "hours" "description")
 
 # Read the input file line by line and replace the row header
 {
@@ -30,6 +30,8 @@ for header in "${new_headers[@]}"; do
     # Use sed to remove the header followed by a colon from the entire document
     sed -i "s/\b$header\b: //g" "$output_file"
 done
+
+sed -i 's/time point_(in_hours): //g' "$output_file"
 
 echo "Row headers updated and saved to $output_file"
 

@@ -1,3 +1,2 @@
 !Sample_characteristics_ch1
 !Sample_description
-!Sample_title

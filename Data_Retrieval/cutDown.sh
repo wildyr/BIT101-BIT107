@@ -19,4 +19,4 @@ output_file="final_metadata.csv"
     done < "$input_file"
 } > "$output_file"
 
-echo "Filtered and capitalized rows saved to $output_file"
+echo "Addtional filtering applied and capitalized row names saved to $output_file"

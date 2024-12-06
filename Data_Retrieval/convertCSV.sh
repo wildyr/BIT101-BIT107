@@ -32,5 +32,5 @@ sed 's/\t/,/g' "$temp_file" > "$output_file"
 # Clean up temporary file
 rm "$temp_file"
 
-echo "Metadata prepared for R and saved to $output_file"
+echo "Filtered metadata cleaned and converted to .csv, saved to $output_file"
 

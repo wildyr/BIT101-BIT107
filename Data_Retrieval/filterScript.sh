@@ -21,3 +21,4 @@ pattern=${pattern:1}  # Remove the leading '|'
 # Extract relevant lines based on the pattern
 grep -E "$pattern" "$input_file" > "$output_file"
 
+echo "Metadata filtered from rownames in $variables_file and saved to $output_file"

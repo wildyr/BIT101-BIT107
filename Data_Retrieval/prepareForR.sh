@@ -33,5 +33,5 @@ done
 
 sed -i 's/time point_(in_hours): //g' "$output_file"
 
-echo "Row headers updated and saved to $output_file"
+echo "Row headers updated, data clean and saved to $output_file"
 

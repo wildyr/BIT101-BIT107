@@ -1,6 +1,7 @@
+#### Data Preparation ####
+#Please setwd to Project directory
+#setwd("~/R/git/assignment2/Data_Analysis")
 metadata <- read.csv("data/final_metadata.csv", header = FALSE, stringsAsFactors = FALSE)
-
-metadata <- read.csv("data/prepared_metadata2.csv", header = FALSE, stringsAsFactors = FALSE)
 
 # Transpose the data
 metadata_t <- as.data.frame(t(metadata))
@@ -35,7 +36,7 @@ mock <- subset(metadata, Treatment == "mock")
 mock_hours <- unique(mock$Hours)
 mock_hours
 
-# Filter the infected data to keep only rows where Hours match the mock Hours (4, 12, or 48)
+# Filter the infected data to keep only rows where Hours match the mock Hours
 filtered_infected <- infected[infected$Hours %in% mock_hours, ]
 
 # Combine the filtered infected rows with all the mock rows
@@ -54,8 +55,8 @@ counts<-read.csv('data/GSE217504_host_counts_matrix.csv', header = T,row.names =
 colnames(counts)
 head(counts)
 
-colnames(samples)
 samples
+str(samples)
 
 # Ensure that the samples dataframe is ordered by the row names (sample IDs)
 samples <- samples[order(rownames(samples)), ]
@@ -70,13 +71,12 @@ counts_filtered <- counts_filtered[, match(rownames(samples), colnames(counts_fi
 all(colnames(counts_filtered) == rownames(samples))  # Should return TRUE
 
 count_data<-counts_filtered
-colnames(counts)
+colnames(count_data)
 rownames(samples)
 
-levels(samples$Hours)
+rm(counts_filtered, counts)
 
-rm(counts_filtered)
-
+#### DESEQ ####
 #create deseq object (this produces a warning about dropping factor levels - this refers to the hours no longer in use, we're only looking at hours 4, 12 and 48 as that is all we have mock data for)
 dds<- DESeqDataSetFromMatrix(countData = count_data, colData = samples, design = ~Hours + Treatment)
 
@@ -103,3 +103,61 @@ head(deseq_result_ordered)
 # Some queries
 # Is ZC3H12A gene differentially expressed?
 deseq_result["ZC3H12A",]
+
+# Extract the most differetially expresed genes due to the Treatment.
+# select genes with a significant change in gene expression (adjusted p-value below 0.05)
+# And log2fold change <1 and >1
+filtered <- deseq_result %>% filter(deseq_result$padj < 0.05)
+filtered <- filtered %>% filter(abs(filtered$log2FoldChange) > 1)
+
+dim(deseq_result)
+dim(filtered)
+
+# Save the deseq reults. We will save both the original and the filtered one
+write.csv(deseq_result,'data/de_results_all.csv')
+write.csv(filtered,'data/de_results_filtered.csv')
+
+# Save the normalised counts
+normalised_counts <- counts(dds,normalized=T)
+head(normalised_counts)
+write.csv(normalised_counts,'data/normalised_counts.csv')
+
+#### EXPLORING THE DATA ####
+# Dispersion plot
+plotDispEsts(dds)
+
+# PCA plot
+# variance stabalising transformation
+vsd <- vst(dds,blind=F)
+
+#use transformed values to generate a pca plot
+plotPCA(vsd,intgroup=c("Hours", "Treatment"))
+
+# Heatmap
+#generate distance martrix
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <-as.matrix(sampleDists)
+colnames(sampleDistMatrix)
+
+#set a colour scheme
+colours <- colorRampPalette(rev(brewer.pal(9,"Greens")))(255)
+
+pheatmap(
+  sampleDistMatrix,
+  clustering_distance_rows = sampleDists,
+  clustering_distance_cols = sampleDists,
+  color = colours,
+  annotation_col = samples,
+  main = "Distance Heatmap"
+)
+
+## Clearly highest similarity among the 48 hour bucket, regardless of treatment. Also between the mock treatment data, regardless of hours.
+
+# Heatmap of log transformed, using top 10 genes
+top_hits <- deseq_result[order(deseq_result$padj),][1:10,]
+top_hits <- row.names(top_hits)
+top_hits
+
+rld <- rlog(dds,blind=F)
+
+pheatmap(assay(rld)[top_hits,], cluster_rows=F,show_rownames=T,cluster_cols=F)

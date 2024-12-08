@@ -49,6 +49,11 @@ library(dplyr)
 library(RColorBrewer)
 library(ggplot2)
 library(ggrepel)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("apeglm")
+library(apeglm)
+
 
 # Load count data
 counts<-read.csv('data/GSE217504_host_counts_matrix.csv', header = T,row.names = 1)
@@ -161,3 +166,54 @@ top_hits
 rld <- rlog(dds,blind=F)
 
 pheatmap(assay(rld)[top_hits,], cluster_rows=F,show_rownames=T,cluster_cols=F)
+pheatmap(assay(rld)[top_hits,],)
+
+annot_info <- as.data.frame(colData(dds)[,c('Hours','Treatment')])
+pheatmap(assay(rld)[top_hits,],annotation_col = annot_info)
+
+
+# Heatmap of Z scores. using top 10 genes.
+cal_z_score <- function(x) {(x-mean(x))/sd(x)}
+
+zscore_all <- t(apply(normalised_counts,1,cal_z_score))
+zscore_subset <- zscore_all[top_hits,]
+pheatmap(zscore_subset, annotation_col = annot_info)
+
+
+# MA Plot
+plotMA(dds,ylim=c(-2,2))
+
+#remove noise
+resultsNames(dds)
+resLFC <- lfcShrink(dds,coef="Treatment_infected_vs_mock", type="apeglm")
+
+plotMA(resLFC,ylim=c(-2,2))
+
+# Volcano Plot
+resLFC <- as.data.frame(resLFC)
+
+#label genes
+# Update thresholds for differential expression
+resLFC$diffexpressed <- "NO"
+resLFC$diffexpressed[resLFC$log2FoldChange > 1 & resLFC$padj < 0.05] <- "UP"
+resLFC$diffexpressed[resLFC$log2FoldChange < -1 & resLFC$padj < 0.05] <- "DOWN"
+
+# Label significant genes
+resLFC$delabel <- NA
+resLFC$delabel[abs(resLFC$log2FoldChange) > 2 & resLFC$padj < 0.05] <- rownames(resLFC)
+
+# Volcano plot
+ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, label=delabel)) +
+  geom_point(aes(size = -log10(padj)), alpha=0.8) +
+  theme_minimal() +
+  geom_text_repel(data=subset(resLFC, abs(log2FoldChange) > 2 & padj < 0.05),max.overlaps = 10,color="darkgreen") +
+  scale_color_manual(values=c('blue', 'grey80', 'red'), name="Expression Change") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey") +
+  labs(title = "Volcano Plot of Differential Expression",
+       x = "Log2 Fold Change (Treated vs Mock)", y = "-log10(adjusted p-value)",
+       caption = "Threshold: padj < 0.05, Log2 Fold Change > |1|") +
+  theme(text = element_text(size = 16), legend.position = "bottom")
+
+
+

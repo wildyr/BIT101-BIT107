@@ -49,10 +49,8 @@ library(dplyr)
 library(RColorBrewer)
 library(ggplot2)
 library(ggrepel)
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("apeglm")
 library(apeglm)
+library(BiocManager)
 
 
 # Load count data
@@ -129,14 +127,16 @@ write.csv(normalised_counts,'data/normalised_counts.csv')
 
 #### EXPLORING THE DATA ####
 # Dispersion plot
-plotDispEsts(dds)
+plotDispEsts(dds,main="Dispersion Estimates of Gene Expression")
 
 # PCA plot
 # variance stabalising transformation
 vsd <- vst(dds,blind=F)
 
 #use transformed values to generate a pca plot
-plotPCA(vsd,intgroup=c("Hours", "Treatment"))
+pca_plot <- plotPCA(vsd, intgroup = c("Hours", "Treatment"))
+pca_plot + ggtitle("Principal Component Analysis (PCA) of Samples")
+
 
 # Heatmap
 #generate distance martrix
@@ -153,7 +153,7 @@ pheatmap(
   clustering_distance_cols = sampleDists,
   color = colours,
   annotation_col = samples,
-  main = "Distance Heatmap"
+  main = "Heatmap of Sample-to-Sample Distances"
 )
 
 ## Clearly highest similarity among the 48 hour bucket, regardless of treatment. Also between the mock treatment data, regardless of hours.
@@ -163,13 +163,17 @@ top_hits <- deseq_result[order(deseq_result$padj),][1:10,]
 top_hits <- row.names(top_hits)
 top_hits
 
+#top_hits2 <- deseq_result[order(deseq_result$padj),][1:20,]
+#top_hits2 <- row.names(top_hits2)
+
 rld <- rlog(dds,blind=F)
 
 pheatmap(assay(rld)[top_hits,], cluster_rows=F,show_rownames=T,cluster_cols=F)
 pheatmap(assay(rld)[top_hits,],)
 
 annot_info <- as.data.frame(colData(dds)[,c('Hours','Treatment')])
-pheatmap(assay(rld)[top_hits,],annotation_col = annot_info)
+pheatmap(assay(rld)[top_hits,],annotation_col = annot_info,main = "Heatmap of Top 10 Most Expressed Genes")
+#pheatmap(assay(rld)[top_hits2,],annotation_col = annot_info,main = "Log transformed top 20 expressed genes")
 
 
 # Heatmap of Z scores. using top 10 genes.
@@ -177,7 +181,9 @@ cal_z_score <- function(x) {(x-mean(x))/sd(x)}
 
 zscore_all <- t(apply(normalised_counts,1,cal_z_score))
 zscore_subset <- zscore_all[top_hits,]
-pheatmap(zscore_subset, annotation_col = annot_info)
+pheatmap(zscore_subset, annotation_col = annot_info,main = "Heatmap of Z-Scored Expression Levels for Top 10 Genes")
+#zscore_subset2 <- zscore_all[top_hits2,]
+#pheatmap(zscore_subset2, annotation_col = annot_info,main = "Heatmap of Z-scored Expression Levels for Top 20 DEGs")
 
 
 # MA Plot
@@ -187,13 +193,12 @@ plotMA(dds,ylim=c(-2,2))
 resultsNames(dds)
 resLFC <- lfcShrink(dds,coef="Treatment_infected_vs_mock", type="apeglm")
 
-plotMA(resLFC,ylim=c(-2,2))
+plotMA(resLFC,ylim=c(-2,2),main="MA Plot of Differential Gene Expression")
 
-# Volcano Plot
+#### Volcano Plot
 resLFC <- as.data.frame(resLFC)
 
-#label genes
-# Update thresholds for differential expression
+#label genes based on differential gene expression
 resLFC$diffexpressed <- "NO"
 resLFC$diffexpressed[resLFC$log2FoldChange > 1 & resLFC$padj < 0.05] <- "UP"
 resLFC$diffexpressed[resLFC$log2FoldChange < -1 & resLFC$padj < 0.05] <- "DOWN"
@@ -210,7 +215,7 @@ ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, lab
   scale_color_manual(values=c('blue', 'grey80', 'red'), name="Expression Change") +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey") +
-  labs(title = "Volcano Plot of Differential Expression",
+  labs(title = "Volcano Plot of Differential Gene Expression",
        x = "Log2 Fold Change (Treated vs Mock)", y = "-log10(adjusted p-value)",
        caption = "Threshold: padj < 0.05, Log2 Fold Change > |1|") +
   theme(text = element_text(size = 16), legend.position = "bottom")

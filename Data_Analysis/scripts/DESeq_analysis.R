@@ -43,6 +43,7 @@ filtered_infected <- infected[infected$Hours %in% mock_hours, ]
 samples <- rbind(filtered_infected, mock)
 rm(mock, infected, filtered_infected, mock_hours, metadata, metadata_t)
 
+#### Load all required libraries and ensure data ready for DESeq ####
 library(DESeq2)
 library(pheatmap)
 library(dplyr)
@@ -52,11 +53,9 @@ library(ggrepel)
 library(apeglm)
 library(BiocManager)
 
-
 # Load count data
 counts<-read.csv('data/GSE217504_host_counts_matrix.csv', header = T,row.names = 1)
 colnames(counts)
-head(counts)
 
 samples
 str(samples)
@@ -79,14 +78,14 @@ rownames(samples)
 
 rm(counts_filtered, counts)
 
-#### DESEQ ####
+#### Perform DESeq  ####
 #create deseq object (this produces a warning about dropping factor levels - this refers to the hours no longer in use, we're only looking at hours 4, 12 and 48 as that is all we have mock data for)
 dds<- DESeqDataSetFromMatrix(countData = count_data, colData = samples, design = ~Hours + Treatment)
 
 # Set the reference for the Treatment factor
 dds$Treatment <- factor(dds$Treatment, levels = c("mock", "infected"))
 
-# Filter the genes
+# Filter the genes to only preserve those with 5 counts or more
 keep <- rowSums(counts(dds)) >= 5
 dds <- dds[keep,]
 
@@ -103,10 +102,6 @@ head(deseq_result)
 deseq_result_ordered <- deseq_result[order(deseq_result$pvalue),]
 head(deseq_result_ordered)
 
-# Some queries
-# Is ZC3H12A gene differentially expressed?
-deseq_result["ZC3H12A",]
-
 # Extract the most differetially expresed genes due to the Treatment.
 # select genes with a significant change in gene expression (adjusted p-value below 0.05)
 # And log2fold change <1 and >1
@@ -116,16 +111,22 @@ filtered <- filtered %>% filter(abs(filtered$log2FoldChange) > 1)
 dim(deseq_result)
 dim(filtered)
 
-# Save the deseq reults. We will save both the original and the filtered one
-write.csv(deseq_result,'data/de_results_all.csv')
-write.csv(filtered,'data/de_results_filtered.csv')
+# Save the deseq reults
+#write.csv(deseq_result,'data/de_results_all.csv')
+#write.csv(filtered,'data/de_results_filtered.csv')
 
 # Save the normalised counts
 normalised_counts <- counts(dds,normalized=T)
-head(normalised_counts)
-write.csv(normalised_counts,'data/normalised_counts.csv')
+#write.csv(normalised_counts,'data/normalised_counts.csv')
 
 #### EXPLORING THE DATA ####
+
+# Replace rownames as descriptive (I wanted to replace the non descriptive SKA03_X values with something descriptive, but ran out of time)
+samples$SampleNumber <- ave(1:nrow(samples),samples$Treatment,samples$Hours,FUN = seq_along)
+samples$SampleID <- paste0(samples$Treatment, "_",samples$Hours, "h_",samples$SampleNumber)
+samples$SampleNumber <- NULL
+print(samples)
+
 # Dispersion plot
 plotDispEsts(dds,main="Dispersion Estimates of Gene Expression")
 
@@ -134,9 +135,8 @@ plotDispEsts(dds,main="Dispersion Estimates of Gene Expression")
 vsd <- vst(dds,blind=F)
 
 #use transformed values to generate a pca plot
-pca_plot <- plotPCA(vsd, intgroup = c("Hours", "Treatment"))
+pca_plot <- plotPCA(vsd, intgroup = c("Hours","Treatment"))
 pca_plot + ggtitle("Principal Component Analysis (PCA) of Samples")
-
 
 # Heatmap
 #generate distance martrix
@@ -147,44 +147,56 @@ colnames(sampleDistMatrix)
 #set a colour scheme
 colours <- colorRampPalette(rev(brewer.pal(9,"Greens")))(255)
 
+annot_info <- as.data.frame(colData(dds)[,c('Treatment','Hours')])
+
 pheatmap(
   sampleDistMatrix,
   clustering_distance_rows = sampleDists,
   clustering_distance_cols = sampleDists,
   color = colours,
-  annotation_col = samples,
-  main = "Heatmap of Sample-to-Sample Distances"
-)
-
-## Clearly highest similarity among the 48 hour bucket, regardless of treatment. Also between the mock treatment data, regardless of hours.
+  annotation_col = annot_info,
+  main = "Heatmap of Sample-to-Sample Distances",
+  #labels_col = samples$SampleID,
+  #labels_row = samples$SampleID
+  )
 
 # Heatmap of log transformed, using top 10 genes
 top_hits <- deseq_result[order(deseq_result$padj),][1:10,]
 top_hits <- row.names(top_hits)
 top_hits
 
-#top_hits2 <- deseq_result[order(deseq_result$padj),][1:20,]
-#top_hits2 <- row.names(top_hits2)
-
 rld <- rlog(dds,blind=F)
 
-pheatmap(assay(rld)[top_hits,], cluster_rows=F,show_rownames=T,cluster_cols=F)
-pheatmap(assay(rld)[top_hits,],)
+#sample_labels <- paste(dds$Treatment, dds$Hours, sep = "_")
+#rm(sample_labels)
+label_colors <- ifelse(dds$Treatment == "mock", "blue", "red")
 
-annot_info <- as.data.frame(colData(dds)[,c('Hours','Treatment')])
-pheatmap(assay(rld)[top_hits,],annotation_col = annot_info,main = "Heatmap of Top 10 Most Expressed Genes")
-#pheatmap(assay(rld)[top_hits2,],annotation_col = annot_info,main = "Log transformed top 20 expressed genes")
-
+pheatmap(
+  assay(rld)[top_hits,],
+  annotation_col = annot_info,
+  main = "Heatmap of Top 10 Most Expressed Genes",
+  labels_col = samples$SampleID
+  )
 
 # Heatmap of Z scores. using top 10 genes.
 cal_z_score <- function(x) {(x-mean(x))/sd(x)}
 
 zscore_all <- t(apply(normalised_counts,1,cal_z_score))
 zscore_subset <- zscore_all[top_hits,]
-pheatmap(zscore_subset, annotation_col = annot_info,main = "Heatmap of Z-Scored Expression Levels for Top 10 Genes")
-#zscore_subset2 <- zscore_all[top_hits2,]
-#pheatmap(zscore_subset2, annotation_col = annot_info,main = "Heatmap of Z-scored Expression Levels for Top 20 DEGs")
+pheatmap(zscore_subset,
+         annotation_col = annot_info,
+         main = "Heatmap of Z-Scored Expression Levels for Top 10 Genes")
 
+# Hierarchical Clustering Dendrogram
+hc <- hclust(sampleDists, method = "ward.D2")
+plot(hc, main = "Hierarchical Clustering Dendrogram of Samples", xlab = "", sub = "", cex = 0.8)
+plot(hc, 
+     labels = samples$SampleID,
+     main = "Hierarchical Clustering Dendrogram of Samples",
+     xlab = "Samples (Hours | Treatment)",
+     sub = "",
+     hang = -1)
+rect.hclust(hc, k=3)
 
 # MA Plot
 plotMA(dds,ylim=c(-2,2))
@@ -212,13 +224,10 @@ ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, lab
   geom_point(aes(size = -log10(padj)), alpha=0.8) +
   theme_minimal() +
   geom_text_repel(data=subset(resLFC, abs(log2FoldChange) > 2 & padj < 0.05),max.overlaps = 10,color="darkgreen") +
-  scale_color_manual(values=c('blue', 'grey80', 'red'), name="Expression Change") +
+  scale_color_manual(values=c('skyblue', 'grey80', 'salmon'), name="Expression Change") +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey") +
   labs(title = "Volcano Plot of Differential Gene Expression",
        x = "Log2 Fold Change (Treated vs Mock)", y = "-log10(adjusted p-value)",
        caption = "Threshold: padj < 0.05, Log2 Fold Change > |1|") +
   theme(text = element_text(size = 16), legend.position = "bottom")
-
-
-

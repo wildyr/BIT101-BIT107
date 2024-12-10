@@ -1,4 +1,4 @@
-#### Data Preparation ####
+#### DATA PREPARATION ####
 #Please setwd to Project directory
 #setwd("~/R/git/assignment2/Data_Analysis")
 metadata <- read.csv("data/final_metadata.csv", header = FALSE, stringsAsFactors = FALSE)
@@ -78,7 +78,7 @@ rownames(samples)
 
 rm(counts_filtered, counts)
 
-#### Perform DESeq  ####
+#### PERFORMING DESEQ  ####
 #create deseq object (this produces a warning about dropping factor levels - this refers to the hours no longer in use, we're only looking at hours 4, 12 and 48 as that is all we have mock data for)
 dds<- DESeqDataSetFromMatrix(countData = count_data, colData = samples, design = ~Hours + Treatment)
 
@@ -104,7 +104,7 @@ head(deseq_result_ordered)
 
 # Extract the most differetially expresed genes due to the Treatment.
 # select genes with a significant change in gene expression (adjusted p-value below 0.05)
-# And log2fold change <1 and >1
+# And log2fold change <-1 and >1
 filtered <- deseq_result %>% filter(deseq_result$padj < 0.05)
 filtered <- filtered %>% filter(abs(filtered$log2FoldChange) > 1)
 
@@ -119,13 +119,13 @@ dim(filtered)
 normalised_counts <- counts(dds,normalized=T)
 #write.csv(normalised_counts,'data/normalised_counts.csv')
 
-#### EXPLORING THE DATA ####
+#### EXPLORING & VISUALISING THE DATA ####
 
-# Replace rownames as descriptive (I wanted to replace the non descriptive SKA03_X values with something descriptive, but ran out of time)
-samples$SampleNumber <- ave(1:nrow(samples),samples$Treatment,samples$Hours,FUN = seq_along)
-samples$SampleID <- paste0(samples$Treatment, "_",samples$Hours, "h_",samples$SampleNumber)
-samples$SampleNumber <- NULL
-print(samples)
+# Replace rownames as descriptive (I stopped using this as I liked the look of Hours/Treatment annotation)
+#samples$SampleNumber <- ave(1:nrow(samples),samples$Treatment,samples$Hours,FUN = seq_along)
+#samples$SampleID <- paste0(samples$Treatment, "_",samples$Hours, "h_",samples$SampleNumber)
+#samples$SampleNumber <- NULL
+#print(samples)
 
 # Dispersion plot
 plotDispEsts(dds,main="Dispersion Estimates of Gene Expression")
@@ -142,7 +142,6 @@ pca_plot + ggtitle("Principal Component Analysis (PCA) of Samples")
 #generate distance martrix
 sampleDists <- dist(t(assay(vsd)))
 sampleDistMatrix <-as.matrix(sampleDists)
-colnames(sampleDistMatrix)
 
 #set a colour scheme
 colours <- colorRampPalette(rev(brewer.pal(9,"Greens")))(255)
@@ -167,15 +166,13 @@ top_hits
 
 rld <- rlog(dds,blind=F)
 
-#sample_labels <- paste(dds$Treatment, dds$Hours, sep = "_")
-#rm(sample_labels)
 label_colors <- ifelse(dds$Treatment == "mock", "blue", "red")
 
 pheatmap(
   assay(rld)[top_hits,],
   annotation_col = annot_info,
   main = "Heatmap of Top 10 Most Expressed Genes",
-  labels_col = samples$SampleID
+  #labels_col = samples$SampleID
   )
 
 # Heatmap of Z scores. using top 10 genes.
@@ -207,17 +204,18 @@ resLFC <- lfcShrink(dds,coef="Treatment_infected_vs_mock", type="apeglm")
 
 plotMA(resLFC,ylim=c(-2,2),main="MA Plot of Differential Gene Expression")
 
-#### Volcano Plot
+# Volcano Plot
 resLFC <- as.data.frame(resLFC)
 
 #label genes based on differential gene expression
 resLFC$diffexpressed <- "NO"
 resLFC$diffexpressed[resLFC$log2FoldChange > 1 & resLFC$padj < 0.05] <- "UP"
 resLFC$diffexpressed[resLFC$log2FoldChange < -1 & resLFC$padj < 0.05] <- "DOWN"
+significant_genes <- resLFC[abs(resLFC$log2FoldChange) > 2 & resLFC$padj < 0.05, ]
 
 # Label significant genes
 resLFC$delabel <- NA
-resLFC$delabel[abs(resLFC$log2FoldChange) > 2 & resLFC$padj < 0.05] <- rownames(resLFC)
+resLFC$delabel[rownames(resLFC) %in% rownames(significant_genes)] <- rownames(significant_genes)
 
 # Volcano plot
 ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, label=delabel)) +

@@ -52,6 +52,8 @@ library(ggplot2)
 library(ggrepel)
 library(apeglm)
 library(BiocManager)
+library(patchwork)
+library(cowplot)
 
 # Load count data
 counts<-read.csv('data/GSE217504_host_counts_matrix.csv', header = T,row.names = 1)
@@ -108,9 +110,6 @@ head(deseq_result_ordered)
 filtered <- deseq_result %>% filter(deseq_result$padj < 0.05)
 filtered <- filtered %>% filter(abs(filtered$log2FoldChange) > 1)
 
-dim(deseq_result)
-dim(filtered)
-
 # Save the deseq reults
 #write.csv(deseq_result,'data/de_results_all.csv')
 #write.csv(filtered,'data/de_results_filtered.csv')
@@ -118,6 +117,46 @@ dim(filtered)
 # Save the normalised counts
 normalised_counts <- counts(dds,normalized=T)
 #write.csv(normalised_counts,'data/normalised_counts.csv')
+
+#### Repeat DESEQ for every timepoint
+samples_4h <- subset(samples, Hours == "4")
+count_data_4h <- count_data[, rownames(samples_4h)]
+dds_4h <- DESeqDataSetFromMatrix(countData = count_data_4h, colData = samples_4h, design = ~ Treatment)
+dds_4h$Treatment <- factor(dds_4h$Treatment, levels = c("mock", "infected"))
+keep_4h <- rowSums(counts(dds_4h)) >= 5
+dds_4h <- dds_4h[keep,]
+dds_4h <- DESeq(dds_4h)
+res_4h <- results(dds_4h)
+res_4h <- as.data.frame(res_4h)
+#write.csv(res_4h, 'data/de_results_4h.csv')
+normalised_counts_4h <- counts(dds_4h,normalized = T)
+#write.csv(normalised_counts_4h, 'data/normalised_counts_4h.csv')
+
+samples_12h <- subset(samples, Hours == "12")
+count_data_12h <- count_data[, rownames(samples_12h)]
+dds_12h <- DESeqDataSetFromMatrix(countData = count_data_12h, colData = samples_12h, design = ~ Treatment)
+dds_12h$Treatment <- factor(dds_12h$Treatment, levels = c("mock", "infected"))
+keep_12h <- rowSums(counts(dds_12h)) >= 5
+dds_12h <- dds_12h[keep,]
+dds_12h <- DESeq(dds_12h)
+res_12h <- results(dds_12h)
+res_12h <- as.data.frame(res_12h)
+#write.csv(res_12h, 'data/de_results_12h.csv')
+normalised_counts_12h <- counts(dds_12h,normalized = T)
+#write.csv(normalised_counts_12h, 'data/normalised_counts_12h.csv')
+
+samples_48h <- subset(samples, Hours == "48")
+count_data_48h <- count_data[, rownames(samples_48h)]
+dds_48h <- DESeqDataSetFromMatrix(countData = count_data_48h, colData = samples_48h, design = ~ Treatment)
+dds_48h$Treatment <- factor(dds_48h$Treatment, levels = c("mock", "infected"))
+keep_48h <- rowSums(counts(dds_48h)) >= 5
+dds_48h <- dds_48h[keep,]
+dds_48h <- DESeq(dds_48h)
+res_48h <- results(dds_48h)
+res_48h <- as.data.frame(res_48h)
+#write.csv(res_48h, 'data/de_results_48h.csv')
+normalised_counts_48h <- counts(dds_48h,normalized = T)
+#write.csv(normalised_counts_48h, 'data/normalised_counts_48h.csv')
 
 #### EXPLORING & VISUALISING THE DATA ####
 
@@ -157,7 +196,7 @@ pheatmap(
   main = "Heatmap of Sample-to-Sample Distances",
   #labels_col = samples$SampleID,
   #labels_row = samples$SampleID
-  )
+)
 
 # Heatmap of log transformed, using top 10 genes
 top_hits <- deseq_result[order(deseq_result$padj),][1:10,]
@@ -173,7 +212,7 @@ pheatmap(
   annotation_col = annot_info,
   main = "Heatmap of Top 10 Most Expressed Genes",
   #labels_col = samples$SampleID
-  )
+)
 
 # Heatmap of Z scores. using top 10 genes.
 cal_z_score <- function(x) {(x-mean(x))/sd(x)}
@@ -204,8 +243,12 @@ resLFC <- lfcShrink(dds,coef="Treatment_infected_vs_mock", type="apeglm")
 
 plotMA(resLFC,ylim=c(-2,2),main="MA Plot of Differential Gene Expression")
 
-# Volcano Plot
+# Volcano Plots
 resLFC <- as.data.frame(resLFC)
+resultsNames(dds_4h)
+LFC_4h <- as.data.frame(lfcShrink(dds_4h,coef="Treatment_infected_vs_mock", type="apeglm"))
+LFC_12h <- as.data.frame(lfcShrink(dds_12h,coef="Treatment_infected_vs_mock", type="apeglm"))
+LFC_48h <- as.data.frame(lfcShrink(dds_48h,coef="Treatment_infected_vs_mock", type="apeglm"))
 
 #label genes based on differential gene expression
 resLFC$diffexpressed <- "NO"
@@ -226,6 +269,65 @@ ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, lab
   geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
   geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey") +
   labs(title = "Volcano Plot of Differential Gene Expression",
-       x = "Log2 Fold Change (Treated vs Mock)", y = "-log10(adjusted p-value)",
+       x = "Log2 Fold Change (Infected vs Mock)", y = "-log10(adjusted p-value)",
        caption = "Threshold: padj < 0.05, Log2 Fold Change > |1|") +
   theme(text = element_text(size = 16), legend.position = "bottom")
+
+
+
+# Load patchwork for easier layout management
+
+generate_volcano <- function(data, title) {
+  
+  data <- data[!is.na(data$log2FoldChange) & !is.na(data$padj), ]
+  
+  data$diffexpressed <- "NO"
+  data$diffexpressed[data$log2FoldChange > 1 & data$padj < 0.05] <- "UP"
+  data$diffexpressed[data$log2FoldChange < -1 & data$padj < 0.05] <- "DOWN"
+  
+  significant_genes <- data[abs(data$log2FoldChange) > 2 & data$padj < 0.05, ]
+  data$delabel <- NA
+  data$delabel[rownames(data) %in% rownames(significant_genes)] <- rownames(significant_genes)
+  
+  # Create the plot
+  p <- ggplot(data, aes(x = log2FoldChange, y = -log10(padj), col = diffexpressed, label = delabel)) +
+    geom_point(aes(size = -log10(padj)), alpha = 0.8) +
+    geom_text_repel(data = subset(data, abs(log2FoldChange) > 2 & padj < 0.05), max.overlaps = 10, color = "darkgreen") +
+    scale_color_manual(values = c('skyblue', 'grey80', 'salmon'), name = "Expression Change") +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey") +
+    geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "grey") +
+    labs(title = title, x = "Log2 Fold Change (Infected vs Mock)", y = "-log10(adjusted p-value)") +
+    theme_minimal() +
+    theme(text = element_text(size = 16), 
+          legend.position = "none", # Remove individual plot legends
+          axis.text = element_text(size = 12))  # Adjust axis text size if needed
+  
+  return(p)
+}
+
+# Generate plots for 4h, 12h, and 48h
+plot_4h <- generate_volcano(LFC_4h, "Volcano Plot for 4h")
+plot_12h <- generate_volcano(LFC_12h, "Volcano Plot for 12h")
+plot_48h <- generate_volcano(LFC_48h, "Volcano Plot for 48h")
+
+# Combine plots side by side using patchwork
+combined_plot <- (plot_4h + plot_12h + plot_48h) +
+  plot_layout(ncol = 3, guides = 'collect') +   # guides='collect' places one legend for all plots
+  plot_annotation(
+    title = "Differential Gene Expression Over Time of Infected cells compared to Mock",
+    subtitle = "Threshold: padj < 0.05, Log2 Fold Change > |1|",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, size = 20),
+      plot.subtitle = element_text(hjust = 0.5, size = 14),
+      axis.title.x = element_text(size = 16, margin = margin(t = 10)),
+      axis.title.y = element_text(size = 16, margin = margin(r = 10)),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12)
+    )
+  ) + 
+  # Adjust legend position to the bottom of the combined plot
+  theme(legend.position = "bottom",  # Ensure the legend is at the bottom
+        legend.box.spacing = unit(1, "lines")) # Adds spacing between the plots and the legend
+
+# Display the combined plot
+combined_plot

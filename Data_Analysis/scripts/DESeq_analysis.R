@@ -169,11 +169,11 @@ filtered_48h <- filtered_48h %>% filter(abs(filtered_48h$log2FoldChange) > 1)
 
 #### EXPLORING & VISUALISING THE DATA ####
 
-# Replace rownames as descriptive (I stopped using this as I liked the look of Hours/Treatment annotation)
-#samples$SampleNumber <- ave(1:nrow(samples),samples$Treatment,samples$Hours,FUN = seq_along)
-#samples$SampleID <- paste0(samples$Treatment, "_",samples$Hours, "h_",samples$SampleNumber)
-#samples$SampleNumber <- NULL
-#print(samples)
+# Replace rownames as descriptive (I stopped using this as I liked the look of Hours/Treatment annotation for the heatmaps)
+samples$SampleNumber <- ave(1:nrow(samples),samples$Treatment,samples$Hours,FUN = seq_along)
+samples$SampleID <- paste0(samples$Treatment, "_",samples$Hours, "h_",samples$SampleNumber)
+samples$SampleNumber <- NULL
+print(samples)
 
 # Dispersion plot
 plotDispEsts(dds,main="Dispersion Estimates of Gene Expression")
@@ -195,8 +195,7 @@ sampleDistMatrix <-as.matrix(sampleDists)
 colours <- colorRampPalette(rev(brewer.pal(9,"Greens")))(255)
 
 annot_info <- as.data.frame(colData(dds)[,c('Treatment','Hours')])
-dist(sample)
-pheatdata()pheatmap(
+pheatmap(
   sampleDistMatrix,
   clustering_distance_rows = sampleDists,
   clustering_distance_cols = sampleDists,
@@ -254,10 +253,6 @@ plotMA(resLFC,ylim=c(-2,2),main="MA Plot of Differential Gene Expression")
 
 # Volcano Plots
 resLFC <- as.data.frame(resLFC)
-resultsNames(dds_4h)
-LFC_4h <- as.data.frame(lfcShrink(dds_4h,coef="Treatment_infected_vs_mock", type="apeglm"))
-LFC_12h <- as.data.frame(lfcShrink(dds_12h,coef="Treatment_infected_vs_mock", type="apeglm"))
-LFC_48h <- as.data.frame(lfcShrink(dds_48h,coef="Treatment_infected_vs_mock", type="apeglm"))
 
 #label genes based on differential gene expression
 resLFC$diffexpressed <- "NO"
@@ -283,6 +278,10 @@ ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, lab
   theme(text = element_text(size = 16), legend.position = "bottom")
 
 # Created function to do the above volcano plot on all 3 time points
+LFC_4h <- as.data.frame(lfcShrink(dds_4h,coef="Treatment_infected_vs_mock", type="apeglm"))
+LFC_12h <- as.data.frame(lfcShrink(dds_12h,coef="Treatment_infected_vs_mock", type="apeglm"))
+LFC_48h <- as.data.frame(lfcShrink(dds_48h,coef="Treatment_infected_vs_mock", type="apeglm"))
+
 generate_volcano <- function(data, title) {
   
   data <- data[!is.na(data$log2FoldChange) & !is.na(data$padj), ]

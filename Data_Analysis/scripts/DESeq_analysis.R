@@ -131,6 +131,9 @@ res_4h <- as.data.frame(res_4h)
 #write.csv(res_4h, 'data/de_results_4h.csv')
 normalised_counts_4h <- counts(dds_4h,normalized = T)
 #write.csv(normalised_counts_4h, 'data/normalised_counts_4h.csv')
+filtered_4h <- res_4h %>% filter(res_4h$padj < 0.05)
+filtered_4h <- filtered_4h %>% filter(abs(filtered_4h$log2FoldChange) > 1)
+#write.csv(filtered_4h,'data/de_results_4h_filtered.csv')
 
 samples_12h <- subset(samples, Hours == "12")
 count_data_12h <- count_data[, rownames(samples_12h)]
@@ -144,6 +147,9 @@ res_12h <- as.data.frame(res_12h)
 #write.csv(res_12h, 'data/de_results_12h.csv')
 normalised_counts_12h <- counts(dds_12h,normalized = T)
 #write.csv(normalised_counts_12h, 'data/normalised_counts_12h.csv')
+filtered_12h <- res_12h %>% filter(res_12h$padj < 0.05)
+filtered_12h <- filtered_12h %>% filter(abs(filtered_12h$log2FoldChange) > 1)
+#write.csv(filtered_12h,'data/de_results_12h_filtered.csv')
 
 samples_48h <- subset(samples, Hours == "48")
 count_data_48h <- count_data[, rownames(samples_48h)]
@@ -157,6 +163,9 @@ res_48h <- as.data.frame(res_48h)
 #write.csv(res_48h, 'data/de_results_48h.csv')
 normalised_counts_48h <- counts(dds_48h,normalized = T)
 #write.csv(normalised_counts_48h, 'data/normalised_counts_48h.csv')
+filtered_48h <- res_48h %>% filter(res_48h$padj < 0.05)
+filtered_48h <- filtered_48h %>% filter(abs(filtered_48h$log2FoldChange) > 1)
+#write.csv(filtered_48h,'data/de_results_48h_filtered.csv')
 
 #### EXPLORING & VISUALISING THE DATA ####
 
@@ -186,8 +195,8 @@ sampleDistMatrix <-as.matrix(sampleDists)
 colours <- colorRampPalette(rev(brewer.pal(9,"Greens")))(255)
 
 annot_info <- as.data.frame(colData(dds)[,c('Treatment','Hours')])
-
-pheatmap(
+dist(sample)
+pheatdata()pheatmap(
   sampleDistMatrix,
   clustering_distance_rows = sampleDists,
   clustering_distance_cols = sampleDists,
@@ -273,10 +282,7 @@ ggplot(data=resLFC, aes(x=log2FoldChange, y=-log10(padj), col=diffexpressed, lab
        caption = "Threshold: padj < 0.05, Log2 Fold Change > |1|") +
   theme(text = element_text(size = 16), legend.position = "bottom")
 
-
-
-# Load patchwork for easier layout management
-
+# Created function to do the above volcano plot on all 3 time points
 generate_volcano <- function(data, title) {
   
   data <- data[!is.na(data$log2FoldChange) & !is.na(data$padj), ]
@@ -289,7 +295,6 @@ generate_volcano <- function(data, title) {
   data$delabel <- NA
   data$delabel[rownames(data) %in% rownames(significant_genes)] <- rownames(significant_genes)
   
-  # Create the plot
   p <- ggplot(data, aes(x = log2FoldChange, y = -log10(padj), col = diffexpressed, label = delabel)) +
     geom_point(aes(size = -log10(padj)), alpha = 0.8) +
     geom_text_repel(data = subset(data, abs(log2FoldChange) > 2 & padj < 0.05), max.overlaps = 10, color = "darkgreen") +
@@ -299,20 +304,20 @@ generate_volcano <- function(data, title) {
     labs(title = title, x = "Log2 Fold Change (Infected vs Mock)", y = "-log10(adjusted p-value)") +
     theme_minimal() +
     theme(text = element_text(size = 16), 
-          legend.position = "none", # Remove individual plot legends
-          axis.text = element_text(size = 12))  # Adjust axis text size if needed
+          legend.position = "none",
+          axis.text = element_text(size = 12))
   
   return(p)
 }
 
-# Generate plots for 4h, 12h, and 48h
+# Generate volcano plots for 4h, 12h, and 48h
 plot_4h <- generate_volcano(LFC_4h, "Volcano Plot for 4h")
 plot_12h <- generate_volcano(LFC_12h, "Volcano Plot for 12h")
 plot_48h <- generate_volcano(LFC_48h, "Volcano Plot for 48h")
 
-# Combine plots side by side using patchwork
+# Combine plots side by side
 combined_plot <- (plot_4h + plot_12h + plot_48h) +
-  plot_layout(ncol = 3, guides = 'collect') +   # guides='collect' places one legend for all plots
+  plot_layout(ncol = 3, guides = 'collect') +
   plot_annotation(
     title = "Differential Gene Expression Over Time of Infected cells compared to Mock",
     subtitle = "Threshold: padj < 0.05, Log2 Fold Change > |1|",
@@ -325,9 +330,7 @@ combined_plot <- (plot_4h + plot_12h + plot_48h) +
       axis.text.y = element_text(size = 12)
     )
   ) + 
-  # Adjust legend position to the bottom of the combined plot
-  theme(legend.position = "bottom",  # Ensure the legend is at the bottom
-        legend.box.spacing = unit(1, "lines")) # Adds spacing between the plots and the legend
+  theme(legend.position = "bottom",legend.box.spacing = unit(1, "lines")) 
 
 # Display the combined plot
 combined_plot

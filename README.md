@@ -2,6 +2,7 @@
 Assignment for BIT101 and BIT107 - Short communication style mini-project report
 
 Data Retrieval:-
+
 A host of scripts to filter the metadata file GSE217504_series_metadata_matrix.txt to the relevant data for analysis.
 
 getVariables.sh - Retrieves all rownames and prints them to variable_list.txt
